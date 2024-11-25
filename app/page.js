@@ -1,101 +1,108 @@
-import Image from "next/image";
+// app/page.js
+"use client";
+import React, { useEffect, useState } from "react";
+import { Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { MonthlyTrendChart } from "@/components/dashboard/MonthlyTrendChart";
+import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
+import { TeamOverview } from "@/components/dashboard/TeamOverview";
+import { DailyInputModal } from "@/components/dashboard/DailyInputModal";
+import { DetailedMetrics } from "@/components/dashboard/DetailedMetrics";
+import { METRICS } from "@/lib/utils/constants";
+import { salesData } from "@/lib/utils/mock-data";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
-export default function Home() {
+import { GoalMetrics } from "@/components/dashboard/GoalMetrics";
+export default function Page() {
+  // const [selectedMember, setSelectedMember] = useState(salesData[0]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  //ユーザーデータの保存認証のやり方
+  // const { goals, loading } = useGoal();
+  const { user, profile } = useAuth();
+  useEffect(() => {
+    //console.log("ユーザーデータを表示する", user);
+  }, []);
+  if (user) {
+    //console.log("プロフィール情報", profile);
+  }
+
+  //各目標の取得目標
+
+  // 選択されたメンバーが橋本チームの場合のみ、他のメンバーデータを取得
+  {
+    /*const otherMembers = salesData.filter(
+    (member) => member.name !== "橋本チーム"
+  );*/
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main>
+      <div className="p-6 max-w-7xl mx-auto space-y-6 bg-white rounded-xl shadow-sm">
+        {/* Header with member selector */}
+        <div className="flex justify-between items-center border-b pb-4">
+          <h1 className="text-2xl font-extrabold text-gray-900">Dashbord</h1>
+          {/*
+          <select
+            className="p-2 bg-white border border-gray-200 rounded-lg"
+            onChange={(e) =>
+              setSelectedMember(
+                salesData.find((d) => d.name === e.target.value)
+              )
+            }
+            value={selectedMember.name}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            {salesData.map((member) => (
+              <option key={member.name} value={member.name}>
+                {member.name}
+              </option>
+            ))}
+          </select>*/}
+          {/*} <div>{profile.name}</div>`*/}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        <h2 className="text-xl font-extrabold text-gray-900">本日の実績</h2>
+        {/* Metric Cards Grid */}
+        <GoalMetrics />
+        {/* Team Overview Section - 橋本チームの場合のみ表示 */}
+        {/* {selectedMember.name === "橋本チーム" && (
+          <div className="border-t pt-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              チームメンバー実績
+            </h2>
+            <TeamOverview data={otherMembers} />
+          </div>
+        )}
+*/}
+
+        <section className="bg-white rounded-xl shadow-sm">
+          <div className="px-8 py-6 border-b border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900">詳細データ分析</h2>
+          </div>
+          <div className="px-8 py-6 mb-10">
+            {/*  <DetailedMetrics
+
+            // data={selectedMember}
+            />*/}
+          </div>
+        </section>
+        {/* Floating Action Button for Daily Input */}
+        {/*
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="fixed right-6 bottom-6 p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          <Plus className="w-6 h-6" />
+        </button>*/}
+        {/* Daily Input Modal */}
+        {/*  <DailyInputModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={(data) => {
+            console.log(data);
+            setIsModalOpen(false);
+          }}
+        />*/}
+      </div>
+    </main>
   );
 }
