@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -15,7 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-
+import { calculateAndSaveDailyTotals } from "@/lib/analytics/daily-summary";
 // LocalStorage utilities
 const STORAGE_KEY = "counterData";
 
@@ -39,121 +39,60 @@ const storeData = (data) => {
   }
 };
 
-// Supabase logging function with retry logic and reload
-const logCountToSupabase = async (item, value, userId, type) => {
-  let retryCount = 0;
-  const maxRetries = 3;
+const CounterSection = ({
+  items,
+  counts,
+  setCounts,
+  type,
+  countHistory,
+  setCountHistory,
+}) => {
+  const handleCount = (item, newCount) => {
+    const timestamp = new Date().toISOString();
 
-  while (retryCount < maxRetries) {
-    try {
-      // セッション確認
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        await supabase.auth.refreshSession();
-      }
-
-      // データ保存
-      const { error } = await supabase.from("count_logs").insert({
-        user_id: userId,
-        count_value: value,
-        count_time: new Date().toISOString(),
-      });
-
-      if (!error) {
-        console.log("Successfully saved to Supabase");
-        return true;
-      }
-
-      throw error;
-    } catch (error) {
-      console.error(`Attempt ${retryCount + 1} failed:`, error);
-      retryCount++;
-
-      if (retryCount === maxRetries) {
-        return false;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, retryCount * 100));
-    }
-  }
-  return false;
-};
-
-const CounterSection = ({ items, counts, setCounts, type }) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const refreshSession = async () => {
-      try {
-        await supabase.auth.refreshSession();
-      } catch (error) {
-        console.error("Session refresh error:", error);
-      }
+    // カウント値を更新
+    const updatedCounts = {
+      ...counts,
+      [item]: Math.max(0, newCount),
     };
-    refreshSession();
-  }, []);
+    setCounts(updatedCounts);
 
-  const handleCount = useCallback(
-    async (item, newCount) => {
-      if (!user?.id) {
-        toast({
-          description: "ユーザー情報の取得に失敗しました",
-          variant: "destructive",
-        });
-        return;
-      }
+    // 履歴を更新
+    const updatedHistory = {
+      ...countHistory,
+      [item]: [
+        ...(countHistory[item] || []),
+        {
+          value: newCount,
+          timestamp,
+          type,
+        },
+      ],
+    };
+    setCountHistory(updatedHistory);
 
-      const updatedCounts = {
-        ...counts,
-        [item]: Math.max(0, newCount),
-      };
-      setCounts(updatedCounts);
+    // ローカルストレージに保存
+    const storedData = getStoredData() || {};
+    const newStoredData = {
+      ...storedData,
+      [type]: {
+        counts: updatedCounts,
+        history: updatedHistory,
+      },
+    };
+    storeData(newStoredData);
 
-      try {
-        const saveSuccess = await logCountToSupabase(
-          item,
-          newCount,
-          user.id,
-          type
-        );
-
-        if (!saveSuccess) {
-          toast({
-            description: "データの保存に失敗しました。ページをリロードします。",
-            variant: "destructive",
-          });
-
-          // 少し待ってからリロード
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-          return;
-        }
-
-        const storedData = getStoredData() || {};
-        storeData({
-          ...storedData,
-          [type]: updatedCounts,
-        });
-      } catch (error) {
-        console.error("Failed to save count:", error);
-        toast({
-          description: "データの保存に失敗しました。ページをリロードします。",
-          variant: "destructive",
-        });
-
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
-      }
-    },
-    [user?.id, counts, setCounts, type, toast]
-  );
+    // コンソールログ出力
+    console.group("カウント操作");
+    console.log("操作時刻:", new Date(timestamp).toLocaleString("ja-JP"));
+    console.log("種別:", type);
+    console.log("項目:", item);
+    console.log("カウント値:", newCount);
+    console.log(`${type}の全カウント:`, updatedCounts);
+    console.log(`${item}の履歴:`, updatedHistory[item]);
+    console.log("LocalStorage データ:", newStoredData);
+    console.groupEnd();
+  };
 
   return (
     <Card className="bg-white shadow-none border-none">
@@ -191,17 +130,18 @@ const CounterSection = ({ items, counts, setCounts, type }) => {
   );
 };
 
-// ... rest of the code remains the same ...
 export default function CounterPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [batteryItems] = useState(["イン", "ドア", "アプ", "アポ"]);
   const [zehItems] = useState(["イン", "ドア", "アプ", "アポ"]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // カウント状態
   const [batteryCounts, setBatteryCounts] = useState(() => {
     const storedData = getStoredData();
     return (
-      storedData?.battery ||
+      storedData?.battery?.counts ||
       Object.fromEntries(batteryItems.map((item) => [item, 0]))
     );
   });
@@ -209,28 +149,122 @@ export default function CounterPage() {
   const [zehCounts, setZehCounts] = useState(() => {
     const storedData = getStoredData();
     return (
-      storedData?.zeh || Object.fromEntries(zehItems.map((item) => [item, 0]))
+      storedData?.zeh?.counts ||
+      Object.fromEntries(zehItems.map((item) => [item, 0]))
     );
   });
 
-  const handleComplete = useCallback(() => {
-    const resetCounts = Object.fromEntries(
-      batteryItems.map((item) => [item, 0])
-    );
+  // 履歴状態
+  const [batteryHistory, setBatteryHistory] = useState(() => {
+    const storedData = getStoredData();
+    return storedData?.battery?.history || {};
+  });
 
-    setBatteryCounts(resetCounts);
-    setZehCounts(resetCounts);
+  const [zehHistory, setZehHistory] = useState(() => {
+    const storedData = getStoredData();
+    return storedData?.zeh?.history || {};
+  });
 
-    storeData({
-      battery: resetCounts,
-      zeh: resetCounts,
-    });
+  const handleComplete = async () => {
+    if (!user?.id) {
+      toast({
+        description: "ユーザー情報の取得に失敗しました",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toISOString();
+
+      // カウントタイミングログ（従来通り）
+      const countLogs = [
+        ...Object.entries(batteryHistory).flatMap(([item, history]) =>
+          history.map((record) => ({
+            user_id: user.id,
+            item_name: item,
+            count_type: "battery",
+            count_time: record.timestamp,
+            local_created_at: record.timestamp,
+          }))
+        ),
+        ...Object.entries(zehHistory).flatMap(([item, history]) =>
+          history.map((record) => ({
+            user_id: user.id,
+            item_name: item,
+            count_type: "zeh",
+            count_time: record.timestamp,
+            local_created_at: record.timestamp,
+          }))
+        ),
+      ];
+
+      // 蓄電池の最終カウント値（新形式）
+      const batteryFinalLog = {
+        user_id: user.id,
+        app_count: batteryCounts["アプ"] || 0,
+        apo_count: batteryCounts["アポ"] || 0,
+        door_count: batteryCounts["ドア"] || 0,
+        in_count: batteryCounts["イン"] || 0,
+        local_created_at: timestamp,
+      };
+
+      // ZEHの最終カウント値（新形式）
+      const zehFinalLog = {
+        user_id: user.id,
+        app_count: zehCounts["アプ"] || 0,
+        apo_count: zehCounts["アポ"] || 0,
+        door_count: zehCounts["ドア"] || 0,
+        in_count: zehCounts["イン"] || 0,
+        local_created_at: timestamp,
+      };
+
+      // Log data before saving
+      console.group("完了処理");
+      console.log("Count Timing Logs:", countLogs);
+      console.log("Battery Final Log:", batteryFinalLog);
+      console.log("ZEH Final Log:", zehFinalLog);
+      console.groupEnd();
+
+      // Save to each table
+      const results = await Promise.all([
+        supabase.from("battery_logs").insert(batteryFinalLog),
+        supabase.from("zeh_logs").insert(zehFinalLog),
+        supabase.from("count_logs").insert(countLogs),
+      ]);
+      // 日次集計の保存を追加
+      const summaryResult = await calculateAndSaveDailyTotals(
+        user.id,
+        batteryCounts,
+        zehCounts
+      );
+
+      // Reset states
+      const resetCounts = Object.fromEntries(
+        batteryItems.map((item) => [item, 0])
+      );
+      setBatteryCounts(resetCounts);
+      setZehCounts(resetCounts);
+      setBatteryHistory({});
+      setZehHistory({});
+      storeData({
+        battery: { counts: resetCounts, history: {} },
+        zeh: { counts: resetCounts, history: {} },
+      });
+
+      toast({
+        description: "データを保存し、リセットしました",
+      });
+    } catch (error) {
+      console.error("Failed to save counts:", error);
+      toast({
+        description: "データの保存に失敗しました",
+        variant: "destructive",
+      });
+    }
 
     setIsModalOpen(false);
-    toast({
-      description: "カウントをリセットしました",
-    });
-  }, [batteryItems, toast]);
+  };
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -257,6 +291,8 @@ export default function CounterPage() {
               items={batteryItems}
               counts={batteryCounts}
               setCounts={setBatteryCounts}
+              countHistory={batteryHistory}
+              setCountHistory={setBatteryHistory}
               type="battery"
             />
           </TabsContent>
@@ -266,6 +302,8 @@ export default function CounterPage() {
               items={zehItems}
               counts={zehCounts}
               setCounts={setZehCounts}
+              countHistory={zehHistory}
+              setCountHistory={setZehHistory}
               type="zeh"
             />
           </TabsContent>
@@ -287,7 +325,7 @@ export default function CounterPage() {
                 本当に完了しますか？
               </AlertDialogTitle>
               <AlertDialogDescription className="text-base text-gray-600">
-                完了すると、すべてのカウントがリセットされます。
+                完了すると、すべてのカウントがSupabaseに保存され、リセットされます。
                 この操作は取り消せません。
               </AlertDialogDescription>
             </AlertDialogHeader>

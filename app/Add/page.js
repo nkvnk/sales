@@ -2,7 +2,6 @@
 "use client";
 import React, { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Calendar } from "lucide-react";
 
 const initialDailyData = {
   date: new Date().toISOString().split("T")[0],
